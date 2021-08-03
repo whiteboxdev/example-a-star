@@ -1,0 +1,8 @@
+mouse_trigger {
+  input: MOUSE_BUTTON_LEFT
+  action: "input_button_left"
+}
+mouse_trigger {
+  input: MOUSE_BUTTON_RIGHT
+  action: "input_button_right"
+}
