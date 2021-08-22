@@ -32,8 +32,8 @@
 
 local grid_start_x = 4
 local grid_start_y = 4
-local grid_width = 37
-local grid_height = 19
+local grid_width = 33
+local grid_height = 15
 
 local acquire_input_focus = hash("acquire_input_focus")
 local input_enter = hash("input_enter")
@@ -41,13 +41,18 @@ local input_space = hash("input_space")
 local input_button_left = hash("input_button_left")
 local input_button_right = hash("input_button_right")
 local layer_1 = hash("layer_1")
+local show_warning = hash("show_warning")
+local show_success = hash("show_success")
 
 local tilemap_url = msg.url("main", "/tilemap", "tilemap")
 
-local tile_white = 8
-local tile_red = 16
-local tile_green = 24
-local tile_yellow = 40
+local tile_floor = 8
+local tile_end = 16
+local tile_start = 24
+local tile_wall = 40
+local tile_path = 56
+
+local infinity = 1 / 0
 
 ----------------------------------------------------------------------
 -- PROPERTIES
@@ -58,32 +63,176 @@ local start_x = 0
 local start_y = 0
 local end_x = 0
 local end_y = 0
+local path_found = false
 
 ----------------------------------------------------------------------
--- FUNCTIONS
+-- RELEVANT A* FUNCTIONS
 ----------------------------------------------------------------------
 
-local function a_star()
-	
+local function is_node_within_bounds(x, y)
+	return grid_start_x <= x and x <= grid_start_x + grid_width and grid_start_y <= y and y <= grid_start_y + grid_height
 end
 
+local function is_node_floor(x, y)
+	return tilemap.get_tile(tilemap_url, layer_1, x, y) ~= tile_wall
+end
+
+local function is_node_in_open_list(open_list, x, y)
+	for _, node in ipairs(open_list) do
+		if x == node.x and y == node.y then
+			return node
+		end
+	end
+	return false
+end
+
+local function is_node_in_closed_list(closed_list, x, y)
+	for _, node in ipairs(closed_list) do
+		if x == node.x and y == node.y then
+			return node
+		end
+	end
+	return false
+end
+
+local function is_end_node(node)
+	return node.x == end_x and node.y == end_y
+end
+
+local function calculate_g(x, y)
+	return math.sqrt(math.pow(x - start_x, 2) + math.pow(y - start_y, 2))
+end
+
+local function calculate_h(x, y)
+	return math.sqrt(math.pow(end_x - x, 2) + math.pow(end_y - y, 2))
+end
+
+local function get_new_node(parent_node, x, y)
+	local g = parent_node and (parent_node.g + 1) or 0
+	local h = calculate_h(x, y)
+	local f = g + h
+	return {
+		parent_node = parent_node,
+		x = x,
+		y = y,
+		g = g,
+		h = h,
+		f = f
+	}
+end
+
+local function get_neighboring_nodes(parent_node, closed_list)
+	local neighboring_nodes = {}
+	if is_node_within_bounds(parent_node.x, parent_node.y + 1) and is_node_floor(parent_node.x, parent_node.y + 1) and not is_node_in_closed_list(closed_list, parent_node.x, parent_node.y + 1) then
+		table.insert(neighboring_nodes, get_new_node(parent_node, parent_node.x, parent_node.y + 1))
+	end
+	if is_node_within_bounds(parent_node.x - 1, parent_node.y) and is_node_floor(parent_node.x - 1, parent_node.y) and not is_node_in_closed_list(closed_list, parent_node.x - 1, parent_node.y ) then
+		table.insert(neighboring_nodes, get_new_node(parent_node, parent_node.x - 1, parent_node.y))
+	end
+	if is_node_within_bounds(parent_node.x, parent_node.y - 1) and is_node_floor(parent_node.x, parent_node.y - 1) and not is_node_in_closed_list(closed_list, parent_node.x, parent_node.y - 1) then
+		table.insert(neighboring_nodes, get_new_node(parent_node, parent_node.x, parent_node.y - 1))
+	end
+	if is_node_within_bounds(parent_node.x + 1, parent_node.y) and is_node_floor(parent_node.x + 1, parent_node.y) and not is_node_in_closed_list(closed_list, parent_node.x + 1, parent_node.y) then
+		table.insert(neighboring_nodes, get_new_node(parent_node, parent_node.x + 1, parent_node.y))
+	end
+	return neighboring_nodes
+end
+
+local function take_node_from_open_list_with_lowest_f(open_list, closed_list)
+	local lowest_f_node_index = 1
+	local lowest_f_node = open_list[1]
+	for index, node in ipairs(open_list) do
+		if lowest_f_node.f > node.f then
+			lowest_f_node_index = index
+			lowest_f_node = node
+		end
+	end
+	table.remove(open_list, lowest_f_node_index)
+	table.insert(closed_list, lowest_f_node)
+	return lowest_f_node
+end
+
+local function backtrack_and_draw_shortest_path(end_node)
+	local path_length = 0
+	local path_cost = 0
+	while end_node.parent_node do
+		if tilemap.get_tile(tilemap_url, layer_1, end_node.x, end_node.y) == tile_floor then
+			tilemap.set_tile(tilemap_url, layer_1, end_node.x, end_node.y, tile_path)
+		end
+		end_node = end_node.parent_node
+		path_length = path_length + 1
+		path_cost = path_cost + 1
+	end
+	return path_length, path_cost
+end
+
+local function a_star()
+	local path_length
+	local path_cost
+	local open_list = { get_new_node(nil, start_x, start_y) }
+	local closed_list = {}
+	while #open_list > 0 do
+		local current_node = take_node_from_open_list_with_lowest_f(open_list, closed_list)
+		if is_end_node(current_node) then
+			path_length, path_cost = backtrack_and_draw_shortest_path(current_node)
+			path_found = true
+			break
+		end
+		local neighboring_nodes = get_neighboring_nodes(current_node, closed_list)
+		for _, neighboring_node in ipairs(neighboring_nodes) do
+			local existing_neighboring_node = is_node_in_open_list(open_list, neighboring_node.x, neighboring_node.y)
+			if existing_neighboring_node then
+				if existing_neighboring_node.f > neighboring_node.f then
+					existing_neighboring_node = neighboring_node
+				end
+			else
+				table.insert(open_list, neighboring_node)
+			end
+		end
+	end
+	if path_found then
+		msg.post("gui#gui", show_success, { path_length = path_length, path_cost = path_cost })
+	else
+		msg.post("gui#gui", show_warning, { id = 3 })
+	end
+end
+
+----------------------------------------------------------------------
+-- IRRELEVANT FUNCTIONS
+----------------------------------------------------------------------
+
 function clear_tilemap()
-	for i = grid_start_y, grid_height do
-		for j = grid_start_x, grid_width do
-			tilemap.set_tile(tilemap_url, layer_1, j, i, tile_white)
+	for i = grid_start_y, grid_start_y + grid_height do
+		for j = grid_start_x, grid_start_x + grid_width do
+			tilemap.set_tile(tilemap_url, layer_1, j, i, tile_floor)
+		end
+	end
+end
+
+function clear_tilemap_path()
+	for i = grid_start_y, grid_start_y + grid_height do
+		for j = grid_start_x, grid_start_x + grid_width do
+			if tilemap.get_tile(tilemap_url, layer_1, j, i) == tile_path then
+				tilemap.set_tile(tilemap_url, layer_1, j, i, tile_floor)
+			end
 		end
 	end
 end
 
 function init(self)
 	msg.post("#", acquire_input_focus)
-	math.randomseed(socket.gettime() * 1000)
 end
 
 function on_input(self, action_id, action)
 	if action.pressed then
 		if action_id == input_enter then
-			
+			if start_x == 0 then
+				msg.post("gui#gui", show_warning, { id = 1 })
+			elseif end_x == 0 then
+				msg.post("gui#gui", show_warning, { id = 2 })
+			else
+				a_star()
+			end
 		elseif action_id == input_space then
 			clear_tilemap()
 			start_x = 0
@@ -91,37 +240,43 @@ function on_input(self, action_id, action)
 			end_x = 0
 			end_y = 0
 		elseif action_id == input_button_left then
+			if path_found then
+				clear_tilemap_path()
+			end
 			local tile_x = math.floor(action.screen_x / 8 / 4) + 1
 			local tile_y = math.floor((action.screen_y - 20) / 8 / 4) + 1
 			local tile_id = tilemap.get_tile(tilemap_url, layer_1, tile_x, tile_y)
-			if tile_id == tile_white then
-				tilemap.set_tile(tilemap_url, layer_1, tile_x, tile_y, tile_yellow)
-			elseif tile_id == tile_yellow then
-				tilemap.set_tile(tilemap_url, layer_1, tile_x, tile_y, tile_white)
+			if tile_id == tile_floor then
+				tilemap.set_tile(tilemap_url, layer_1, tile_x, tile_y, tile_wall)
+			elseif tile_id == tile_wall then
+				tilemap.set_tile(tilemap_url, layer_1, tile_x, tile_y, tile_floor)
 			end
 		elseif action_id == input_button_right then
+			if path_found then
+				clear_tilemap_path()
+			end
 			local tile_x = math.floor(action.screen_x / 8 / 4) + 1
 			local tile_y = math.floor((action.screen_y - 20) / 8 / 4) + 1
 			local tile_id = tilemap.get_tile(tilemap_url, layer_1, tile_x, tile_y)
-			if tile_id == tile_white then
+			if tile_id == tile_floor then
 				if start_x == 0 then
-					tilemap.set_tile(tilemap_url, layer_1, tile_x, tile_y, tile_green)
+					tilemap.set_tile(tilemap_url, layer_1, tile_x, tile_y, tile_start)
 					start_x = tile_x
 					start_y = tile_y
 				elseif end_x == 0 then
-					tilemap.set_tile(tilemap_url, layer_1, tile_x, tile_y, tile_red)
+					tilemap.set_tile(tilemap_url, layer_1, tile_x, tile_y, tile_end)
 					end_x = tile_x
 					end_y = tile_y
 				else
-					tilemap.set_tile(tilemap_url, layer_1, end_x, end_y, tile_white)
-					tilemap.set_tile(tilemap_url, layer_1, tile_x, tile_y, tile_red)
+					tilemap.set_tile(tilemap_url, layer_1, end_x, end_y, tile_floor)
+					tilemap.set_tile(tilemap_url, layer_1, tile_x, tile_y, tile_end)
 					end_x = tile_x
 					end_y = tile_y
 				end
-			elseif tile_id == tile_green then
-				tilemap.set_tile(tilemap_url, layer_1, tile_x, tile_y, tile_white)
+			elseif tile_id == tile_start then
+				tilemap.set_tile(tilemap_url, layer_1, tile_x, tile_y, tile_floor)
 				if end_x ~= 0 then
-					tilemap.set_tile(tilemap_url, layer_1, end_x, end_y, tile_green)
+					tilemap.set_tile(tilemap_url, layer_1, end_x, end_y, tile_start)
 					start_x = end_x
 					start_y = end_y
 					end_x = 0
@@ -130,8 +285,8 @@ function on_input(self, action_id, action)
 					start_x = 0
 					start_y = 0
 				end
-			elseif tile_id == tile_red then
-				tilemap.set_tile(tilemap_url, layer_1, tile_x, tile_y, tile_white)
+			elseif tile_id == tile_end then
+				tilemap.set_tile(tilemap_url, layer_1, tile_x, tile_y, tile_floor)
 				end_x = 0
 				end_y = 0
 			end

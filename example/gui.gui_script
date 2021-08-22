@@ -1,3 +1,28 @@
+local show_warning = hash("show_warning")
+local node_warning = hash("node_warning")
+local show_success = hash("show_success")
+local node_success = hash("node_success")
+
+local handle
+
 function on_message(self, message_id, message, sender)
-	
+	if message_id == show_warning then
+		gui.set_text(gui.get_node(node_warning), message.id == 1 and "Missing 'Start' Tile" or (message.id == 2 and "Missing 'End' Tile" or "No Viable Path"))
+		if handle then
+			timer.cancel(handle)
+		end
+		handle = timer.delay(3, false, function()
+			gui.set_text(gui.get_node(node_warning), "")
+			handle = nil
+		end)
+	elseif message_id == show_success then
+		gui.set_text(gui.get_node(node_success), "Length: " .. message.path_length .. " Tiles   -   Cost: " .. message.path_cost .. " Units")
+		if handle then
+			timer.cancel(handle)
+		end
+		handle = timer.delay(3, false, function()
+			gui.set_text(gui.get_node(node_success), "")
+			handle = nil
+		end)
+	end
 end
