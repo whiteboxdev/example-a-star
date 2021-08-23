@@ -6,6 +6,7 @@ local handle
 
 function on_message(self, message_id, message, sender)
 	if message_id == show_warning then
+		gui.set_color(gui.get_node(node_popup), vmath.vector4(1, 0, 0, 1))
 		gui.set_text(gui.get_node(node_popup), message.id == 1 and "Missing 'Start' Tile" or (message.id == 2 and "Missing 'End' Tile" or "No Viable Path"))
 		if handle then
 			timer.cancel(handle)
@@ -15,6 +16,7 @@ function on_message(self, message_id, message, sender)
 			handle = nil
 		end)
 	elseif message_id == show_success then
+		gui.set_color(gui.get_node(node_popup), vmath.vector4(0, 1, 0, 1))
 		gui.set_text(gui.get_node(node_popup), "Length: " .. message.path_length .. " Tiles   -   Cost: " .. message.path_cost .. " Units")
 		if handle then
 			timer.cancel(handle)

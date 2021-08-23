@@ -110,7 +110,7 @@ local function get_floor_weight(x, y)
 	if tile_id == tile_floor or tile_id == tile_end then
 		return 1
 	elseif tile_id == tile_floor_weighted then
-		return 2
+		return 3
 	end
 	return infinity
 end
