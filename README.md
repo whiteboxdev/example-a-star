@@ -1,5 +1,5 @@
 # A*
-Demonstration of the A* algorithm and pathfinding.
+Example of the A* algorithm and pathfinding.
 
 Watch the reference video: https://www.youtube.com/watch?v=  
 Play with the interactive HTML5 demo: https://klaytonkowalski.github.io/bundles/a-star/index.html
