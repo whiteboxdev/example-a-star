@@ -13,9 +13,10 @@ height = 720
 input_method = HiddenInputField
 
 [project]
-title = A*
+title = A-Star
 publisher = Klayton Kowalski
 developer = Klayton Kowalski
+version = 1.0.0
 dependencies#0 = https://github.com/rgrams/rendercam/archive/master.zip
 
 [tilemap]
@@ -28,4 +29,5 @@ default_texture_mag_filter = nearest
 [html5]
 show_fullscreen_button = 0
 scale_mode = no_scale
+cssfile = /builtins/manifests/web/dark_theme.css
 
